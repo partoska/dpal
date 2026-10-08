@@ -1,0 +1,10 @@
+Daemon Pal (dpal)
+
+This installer will place the dpal command-line tool into /usr/local/bin.
+
+Daemon Pal is a compact user-space tool for process management. It runs
+either as a control process that supervises the lifecycle of other
+processes, or as a command executor that modifies a running control
+process.
+
+After installation, run "dpal -h" in a terminal to get started.

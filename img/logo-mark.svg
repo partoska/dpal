@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="title">
+  <title id="title">Daemon Pal</title>
+  <defs>
+    <linearGradient id="gearFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3E5F94"/>
+      <stop offset="1" stop-color="#2A4472"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF9152"/>
+      <stop offset="1" stop-color="#EE4F2B"/>
+    </linearGradient>
+    <linearGradient id="screenFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#13213A"/>
+      <stop offset="1" stop-color="#0A1222"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glyphShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#050A14" flood-opacity="0.40"/>
+    </filter>
+    <rect id="tooth" x="-36" y="-206" width="72" height="72" rx="14"/>
+  </defs>
+
+  <!-- gear -->
+  <g transform="translate(256 226)" fill="url(#gearFill)">
+    <circle r="166"/>
+    <use href="#tooth"/>
+    <use href="#tooth" transform="rotate(45)"/>
+    <use href="#tooth" transform="rotate(90)"/>
+    <use href="#tooth" transform="rotate(135)"/>
+    <use href="#tooth" transform="rotate(180)"/>
+    <use href="#tooth" transform="rotate(225)"/>
+    <use href="#tooth" transform="rotate(270)"/>
+    <use href="#tooth" transform="rotate(315)"/>
+  </g>
+
+  <!-- horns + head -->
+  <g fill="url(#body)" filter="url(#glyphShadow)">
+    <path d="M126 214 C84 180 82 110 124 54 C120 100 134 140 178 160 Z"/>
+    <path d="M386 214 C428 180 430 110 388 54 C392 100 378 140 334 160 Z"/>
+    <ellipse cx="256" cy="252" rx="150" ry="132"/>
+  </g>
+
+  <ellipse cx="256" cy="158" rx="78" ry="24" fill="url(#sheen)"/>
+
+  <!-- eyes -->
+  <g fill="#0B1426">
+    <path d="M170 214 L234 226 C240 252 228 272 204 272 C178 272 164 248 170 214 Z"/>
+    <path d="M342 214 L278 226 C272 252 284 272 308 272 C334 272 348 248 342 214 Z"/>
+  </g>
+
+  <!-- terminal -->
+  <rect x="108" y="312" width="296" height="172" rx="30" fill="url(#screenFill)" stroke="#FFF3E4" stroke-width="12" filter="url(#glyphShadow)"/>
+  <path d="M166 372 L210 406 L166 440" fill="none" stroke="#FFF3E4" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M240 440 L302 440" fill="none" stroke="#FF8A4C" stroke-width="22" stroke-linecap="round"/>
+</svg>

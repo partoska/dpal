@@ -1,0 +1,150 @@
+# Daemon Pal - Compact user-space tool/library for process management.
+# Copyright (C) 2024 Fabrika Charvat s.r.o. All rights reserved.
+# Developed by Partoska Laboratory team, <https://lab.partoska.com>
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# You can contact the author(s) via email at ask <at> partoska.com.
+#
+
+name: Build
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-linux-amd64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_SANITIZERS=ON -DWITH_VERBOSE_DEBUG=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_amd64
+          path: build/src/cli/dpal
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_SANITIZERS=ON -DWITH_VERBOSE_DEBUG=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_arm64
+          path: build/src/cli/dpal
+  build-linux-armhf:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Register QEMU handlers
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm
+      - name: Build and test in Raspberry Pi OS (ARMv6)
+        run: |
+          docker run --rm --platform linux/arm/v6 \
+            -v "$PWD":/src -w /src \
+            --entrypoint /bin/bash \
+            balenalib/rpi-raspbian:bookworm -eu -o pipefail -c '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+                build-essential cmake
+              cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_SANITIZERS=OFF -DWITH_VERBOSE_DEBUG=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+              cmake --build build --parallel "$(nproc)"
+              ctest --test-dir build --output-on-failure
+              chown -R '"$(id -u):$(id -g)"' build
+            '
+      - name: Verify ARMv6 output
+        run: |
+          readelf -A build/src/cli/dpal | grep -E "Tag_CPU_arch:|Tag_FP_arch:"
+          readelf -A build/src/cli/dpal | grep -q "Tag_CPU_arch: v6" || {
+            echo "::error::binary is not ARMv6, it will not run on a Pi Zero / Zero W"
+            exit 1
+          }
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_armhf
+          path: build/src/cli/dpal
+  build-macos:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_SANITIZERS=ON -DWITH_VERBOSE_DEBUG=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_darwin_universal
+          path: build/src/cli/dpal
+  build-npm:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check npm launcher
+        run: node --check npm/dpal/bin/dpal.js
+      - name: Verify npm package versions
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^project(dpal VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          node .github/scripts/npm-version.js verify "$VERSION"
+      - name: Dry-run pack all npm packages
+        run: |
+          set -euo pipefail
+          for d in npm/*/; do
+            ( cd "$d" && npm pack --dry-run )
+          done

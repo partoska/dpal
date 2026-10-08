@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>@CPACK_PACKAGE_NAME@</title>
+    <welcome file="@CPACK_RESOURCE_FILE_WELCOME_NOPATH@"/>
+    <readme file="@CPACK_RESOURCE_FILE_README_NOPATH@"/>
+    <license file="@CPACK_RESOURCE_FILE_LICENSE_NOPATH@"/>
+    <background file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
+    <background-darkAqua file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
+    <domains enable_anywhere="true" enable_currentUserHome="false" enable_localSystem="true"/>
+    <options customize="never" require-scripts="false"/>
+    <choices-outline>
+        <line choice="@CPACK_PACKAGE_NAME@"/>
+    </choices-outline>
+    <choice id="@CPACK_PACKAGE_NAME@" title="@CPACK_PACKAGE_NAME@ @CPACK_PACKAGE_VERSION@">
+        <pkg-ref id="@CPACK_PRODUCTBUILD_IDENTIFIER@"/>
+    </choice>
+    <pkg-ref id="@CPACK_PRODUCTBUILD_IDENTIFIER@" version="@CPACK_PACKAGE_VERSION@">#@CPACK_PACKAGE_NAME@</pkg-ref>
+</installer-gui-script>

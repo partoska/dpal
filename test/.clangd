@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - "-xc"
+    - "-std=c99"
+    - "--include-directory=../src/lib/inc"

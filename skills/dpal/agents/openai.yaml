@@ -1,0 +1,5 @@
+interface:
+  display_name: "dpal"
+  short_description: "Supervise and script long-running processes with the Daemon Pal (dpal) CLI"
+  icon_large: "./assets/logo.png"
+  default_prompt: "Use $dpal to construct the exact command or workflow for my process management task."

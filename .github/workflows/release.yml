@@ -1,0 +1,319 @@
+# Daemon Pal - Compact user-space tool/library for process management.
+# Copyright (C) 2024 Fabrika Charvat s.r.o. All rights reserved.
+# Developed by Partoska Laboratory team, <https://lab.partoska.com>
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# You can contact the author(s) via email at ask <at> partoska.com.
+#
+
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check-version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Verify tag matches project version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=${GITHUB_REF_NAME#v}
+          CMAKE_VERSION=$(sed -n 's/^project(dpal VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          HEADER_VERSION=$(sed -n 's/^#define DP_VERSION "\([0-9.]*\)"/\1/p' src/lib/inc/dpaltypes.h)
+          echo "tag=${VERSION} cmake=${CMAKE_VERSION} header=${HEADER_VERSION}"
+          if [ "$VERSION" != "$CMAKE_VERSION" ] || [ "$VERSION" != "$HEADER_VERSION" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match CMakeLists.txt (${CMAKE_VERSION}) / dpaltypes.h (${HEADER_VERSION})"
+            exit 1
+          fi
+          node .github/scripts/npm-version.js verify "$VERSION"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+  build-linux-amd64:
+    needs: [check-version]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake rpm
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_SANITIZERS=OFF -DWITH_VERBOSE_DEBUG=OFF -DWITH_TESTS=OFF -DCMAKE_VERBOSE_MAKEFILE=ON
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Package
+        run: cpack --config build/CPackConfig.cmake
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_amd64
+          path: build/src/cli/dpal
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages_linux_amd64
+          path: dist/
+  build-linux-arm64:
+    needs: [check-version]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake rpm
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_SANITIZERS=OFF -DWITH_VERBOSE_DEBUG=OFF -DWITH_TESTS=OFF -DCMAKE_VERBOSE_MAKEFILE=ON
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Package
+        run: cpack --config build/CPackConfig.cmake
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_arm64
+          path: build/src/cli/dpal
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages_linux_arm64
+          path: dist/
+  build-linux-armhf:
+    needs: [check-version]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Register QEMU handlers
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm
+      - name: Build in Raspberry Pi OS (ARMv6)
+        run: |
+          docker run --rm --platform linux/arm/v6 \
+            -v "$PWD":/src -w /src \
+            --entrypoint /bin/bash \
+            balenalib/rpi-raspbian:bookworm -eu -o pipefail -c '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+                build-essential cmake
+              cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_SANITIZERS=OFF -DWITH_VERBOSE_DEBUG=OFF -DWITH_TESTS=OFF -DCMAKE_VERBOSE_MAKEFILE=ON
+              cmake --build build --parallel "$(nproc)"
+              cpack --config build/CPackConfig.cmake -G "DEB;TGZ"
+              chown -R '"$(id -u):$(id -g)"' build dist
+            '
+      - name: Verify ARMv6 output
+        run: |
+          readelf -A build/src/cli/dpal | grep -E "Tag_CPU_arch:|Tag_FP_arch:"
+          readelf -A build/src/cli/dpal | grep -q "Tag_CPU_arch: v6" || {
+            echo "::error::binary is not ARMv6, it will not run on a Pi Zero / Zero W"
+            exit 1
+          }
+          docker run --rm --platform linux/arm/v6 \
+            -v "$PWD":/src -w /src \
+            --entrypoint /src/build/src/cli/dpal \
+            balenalib/rpi-raspbian:bookworm --version
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_linux_armhf
+          path: build/src/cli/dpal
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages_linux_armhf
+          path: dist/
+  build-macos:
+    needs: [check-version]
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_SANITIZERS=OFF -DWITH_VERBOSE_DEBUG=OFF -DWITH_TESTS=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build
+        run: cmake --build build --parallel 1
+      - name: Package
+        run: cpack --config build/CPackConfig.cmake
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dpal_darwin_universal
+          path: build/src/cli/dpal
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages_darwin_universal
+          path: dist/
+  release:
+    needs:
+      [
+        check-version,
+        build-linux-amd64,
+        build-linux-arm64,
+        build-linux-armhf,
+        build-macos,
+      ]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.check-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts/
+      - name: Collect release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/dpal_linux_amd64/dpal release/dpal_${VERSION}_linux_amd64
+          cp artifacts/dpal_linux_arm64/dpal release/dpal_${VERSION}_linux_arm64
+          cp artifacts/dpal_linux_armhf/dpal release/dpal_${VERSION}_linux_armhf
+          cp artifacts/dpal_darwin_universal/dpal release/dpal_${VERSION}_darwin_universal
+          cp artifacts/packages_*/* release/
+          ( cd release && sha256sum * > SHA256SUMS )
+          cat release/SHA256SUMS
+      - name: Create release
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+  npm-publish:
+    needs: [check-version, release]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.check-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dpal_*
+          path: artifacts/
+      - name: Stamp and verify package versions
+        run: |
+          node .github/scripts/npm-version.js stamp "$VERSION"
+          node .github/scripts/npm-version.js verify "$VERSION"
+      - name: Stage native binaries into platform packages
+        run: |
+          set -euo pipefail
+          declare -A SRC=(
+            [npm/dpal-darwin]=artifacts/dpal_darwin_universal/dpal
+            [npm/dpal-linux-x64]=artifacts/dpal_linux_amd64/dpal
+            [npm/dpal-linux-arm64]=artifacts/dpal_linux_arm64/dpal
+            [npm/dpal-linux-arm]=artifacts/dpal_linux_armhf/dpal
+          )
+          for pkg in "${!SRC[@]}"; do
+            src="${SRC[$pkg]}"
+            if [ ! -f "$src" ]; then
+              echo "::error::missing expected binary artifact: $src"
+              exit 1
+            fi
+            mkdir -p "$pkg/bin"
+            cp "$src" "$pkg/bin/dpal"
+            chmod +x "$pkg/bin/dpal"
+          done
+      - name: Publish packages
+        run: |
+          set -euo pipefail
+          # Platform packages first, so the main package's optionalDependencies
+          # resolve as soon as it is published. Already-published versions are
+          # skipped, which makes re-running this job safe.
+          for d in npm/dpal-darwin npm/dpal-linux-x64 npm/dpal-linux-arm64 npm/dpal-linux-arm npm/dpal; do
+            name=$(node -p "require('./$d/package.json').name")
+            if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
+              echo "${name}@${VERSION} already published, skipping"
+              continue
+            fi
+            ( cd "$d" && npm publish --provenance --access public )
+          done
+  homebrew-update:
+    needs: [check-version, release]
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.check-version.outputs.version }}
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v7
+        with:
+          repository: partoska/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dpal_*
+          path: artifacts/
+      - name: Update formula
+        run: |
+          set -euo pipefail
+          SHA256_DARWIN=$(sha256sum artifacts/dpal_darwin_universal/dpal | cut -d' ' -f1)
+          SHA256_LINUX_AMD64=$(sha256sum artifacts/dpal_linux_amd64/dpal | cut -d' ' -f1)
+          SHA256_LINUX_ARM64=$(sha256sum artifacts/dpal_linux_arm64/dpal | cut -d' ' -f1)
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/dpal.rb
+          sed -i "/url .*darwin_universal/{n; s/sha256 \".*\"/sha256 \"${SHA256_DARWIN}\"/}" Formula/dpal.rb
+          sed -i "/url .*linux_amd64/{n; s/sha256 \".*\"/sha256 \"${SHA256_LINUX_AMD64}\"/}" Formula/dpal.rb
+          sed -i "/url .*linux_arm64/{n; s/sha256 \".*\"/sha256 \"${SHA256_LINUX_ARM64}\"/}" Formula/dpal.rb
+          # Fail loudly if the formula layout drifted and a substitution missed.
+          for expected in "version \"${VERSION}\"" "sha256 \"${SHA256_DARWIN}\"" \
+                          "sha256 \"${SHA256_LINUX_AMD64}\"" "sha256 \"${SHA256_LINUX_ARM64}\""; do
+            if ! grep -qF "$expected" Formula/dpal.rb; then
+              echo "::error::Formula/dpal.rb was not updated: missing ${expected}"
+              exit 1
+            fi
+          done
+          cat Formula/dpal.rb
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "dpal-ops"
+          git config user.email "dpal-ops@users.noreply.github.com"
+          git add Formula/dpal.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git commit -m "Update dpal to ${GITHUB_REF_NAME}"
+          git push
