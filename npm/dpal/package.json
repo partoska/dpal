@@ -1,6 +1,6 @@
 {
   "name": "@partoska/dpal",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Compact user-space tool for process management — supervise, restart, and persist long-running processes.",
   "bin": {
     "dpal": "bin/dpal.js"
@@ -10,10 +10,10 @@
     "README.md"
   ],
   "optionalDependencies": {
-    "@partoska/dpal-darwin": "1.3.0",
-    "@partoska/dpal-linux-x64": "1.3.0",
-    "@partoska/dpal-linux-arm64": "1.3.0",
-    "@partoska/dpal-linux-arm": "1.3.0"
+    "@partoska/dpal-darwin": "1.3.1",
+    "@partoska/dpal-linux-x64": "1.3.1",
+    "@partoska/dpal-linux-arm64": "1.3.1",
+    "@partoska/dpal-linux-arm": "1.3.1"
   },
   "engines": {
     "node": ">=18"

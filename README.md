@@ -4,7 +4,7 @@
 
 # Daemon Pal
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.3.1)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 [![Build](https://github.com/partoska/dpal/actions/workflows/build.yml/badge.svg)](https://github.com/partoska/dpal/actions/workflows/build.yml)
 [![npm](https://img.shields.io/npm/v/@partoska/dpal.svg)](https://www.npmjs.com/package/@partoska/dpal)

@@ -34,7 +34,7 @@ set -euo pipefail
 
 PROJECT_NAME="Daemon Pal"
 PROJECT_BRIEF="Compact user-space tool and library for process management"
-PROJECT_VERSION="1.3.0"
+PROJECT_VERSION="1.3.1"
 PROJECT_LOGO="img/logo-mark_64.png"
 INPUT_DIRS="src/lib/inc src/lib/src"
 OUTPUT_DIR="docs"
