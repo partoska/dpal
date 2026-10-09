@@ -535,10 +535,16 @@ dpcExecCreate (DPInt sendid, const DPChar *arg)
     }
 
   // Read each argument.
-  DPSize remain = CMD_ARG_MAX;
+  DPSize remain = CMD_ARG_MAX - SIZEOF (DPInt);
   for (DPInt i = 0; i < argc; ++i)
     {
       DPSize sz = 0;
+      if (remain < SIZEOF (sz))
+        {
+          DPC_WARN ("Argument too long");
+          dpcExecReplyError (sendid, "Argument too long");
+          return DPC_EFAIL;
+        }
       dpcMemcpy (&sz, ptr, SIZEOF (sz));
       if (sz == 0)
         {
@@ -546,7 +552,7 @@ dpcExecCreate (DPInt sendid, const DPChar *arg)
           dpcExecReplyError (sendid, "Argument is empty");
           return DPC_EFAIL;
         }
-      if (sz + SIZEOF (sz) > remain)
+      if (sz > remain - SIZEOF (sz))
         {
           DPC_WARN ("Argument too long");
           dpcExecReplyError (sendid, "Argument too long");
@@ -559,11 +565,27 @@ dpcExecCreate (DPInt sendid, const DPChar *arg)
       ptr += sz;
     }
 
+  // Read the process directory (absolute path) which follows the args.
+  DPSize dirsz = 0;
+  if (remain >= SIZEOF (dirsz))
+    {
+      dpcMemcpy (&dirsz, ptr, SIZEOF (dirsz));
+    }
+  if (dirsz <= 1 || dirsz > remain - SIZEOF (dirsz)
+      || ptr[SIZEOF (dirsz)] != '/' || ptr[SIZEOF (dirsz) + dirsz - 1] != '\0')
+    {
+      DPC_WARN ("Invalid process directory");
+      dpcExecReplyError (sendid, "Invalid process directory");
+      return DPC_EFAIL;
+    }
+  const DPChar *dir = ptr + SIZEOF (dirsz);
+
 #ifdef _DEBUG
   for (DPInt i = 0; i < argc; ++i)
     {
       DPC_DSLOW ("Create process argv[%d]: %s", i, args[i]);
     }
+  DPC_DSLOW ("Create process dir: %s", dir);
 #endif
 
   DPChar *app = dpcStrndup (args[0], DP_APP_MAX);
@@ -610,7 +632,7 @@ dpcExecCreate (DPInt sendid, const DPChar *arg)
   args[0] = basename;
   const DPChar *envs[] = { NULL };
   const DPChar *ERROR_DEF = "Cannot initialize definition";
-  CHECK_DPAL (dpProcDefInit (&def, name, app, ".", args, envs), ERROR_DEF, {
+  CHECK_DPAL (dpProcDefInit (&def, name, app, dir, args, envs), ERROR_DEF, {
     dpcFree (appdup);
     dpcFree (app);
 
@@ -1083,6 +1105,16 @@ dpcCtrl (DPInt argc, DPChar *argv[])
       initialize = TRUE;
       dpcStrncpy (ini, DPAL_INI, CHARSMAX (ini));
     }
+  else
+    {
+      // Resolve the INI file before switching to workdir so that relative
+      // paths are relative to the caller's current directory.
+      DPChar *path = dpcRealpath (ini, NULL);
+      CHECK_GENERIC (path != NULL, "INI file does not exist",
+                     EXIT_WITH_FAILURE);
+      dpcStrncpy (ini, path, CHARSMAX (ini));
+      dpcFree (path);
+    }
 
   DPC_DSLOW ("Switching to workdir: %s", workdir);
   CHECK_POSIX (dpcChdir (workdir), "Cannot switch to work directory",
@@ -1100,6 +1132,7 @@ dpcCtrl (DPInt argc, DPChar *argv[])
   DPC_INFO ("Spawned new Daemon Pal control process ...");
   DPC_INFO ("Working directory: %s", workdir);
 
+  DPCStatus status = DPC_EFAIL;
   do
     {
       // Set-up DPAL lib.
@@ -1122,6 +1155,8 @@ dpcCtrl (DPInt argc, DPChar *argv[])
 
       // Clean up DPAL lib.
       dpcDpalDestroy ();
+
+      status = DPC_OK;
     }
   while (FALSE);
 
@@ -1129,6 +1164,12 @@ dpcCtrl (DPInt argc, DPChar *argv[])
   dpcMsgDestroy (recvid);
 
   DPC_INFO ("Exiting Daemon Pal control process. Bye!");
+
+  if (status != DPC_OK)
+    {
+      // Control process could not be set up.
+      EXIT_WITH_FAILURE
+    }
 
   // Do not return. Always exit!
   EXIT_WITH_SUCCESS

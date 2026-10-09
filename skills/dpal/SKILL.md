@@ -4,7 +4,7 @@ description: Use the Daemon Pal (dpal) CLI to manage process lifecycles — star
 license: MIT
 metadata:
   author: Partoska Laboratory
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # Daemon Pal (dpal)
@@ -22,10 +22,12 @@ The usual workflow is: start one control process, then issue executor commands a
 - Working directory is resolved in this order: `-D/--dir` → `$DPAL_HOME` → `$HOME/.dpal` → current directory.
 - **Processes** are identified by **NAME** or numeric **ID**. Most commands take one or more targets, or `-a/--all`.
 - IPC is via SysV message queues keyed off the working directory. "No control process is running" means no daemon is bound to that workdir.
+- The control process `chdir`s into its working directory. Each child then switches to its own `Dir=` before exec, so a relative `App=` (e.g. `./server`) resolves against `Dir`, and a bare name (e.g. `node`) is looked up on the control process's `PATH`.
+- **IDs** are unique and never clash. An INI entry without `Id=` defaults to `0`. If the requested ID is taken, the lowest free ID ≥ it is used instead. Processes added with `-c` get the highest ID + 1. `-p`/`-e` write the assigned IDs back out, so they stay stable across restarts.
 
 ## Installation
 
-Daemon Pal is available for macOS and Linux (no Windows binaries yet), including Raspberry Pi (arm64 and 32-bit armhf). If the environment cannot run installers, using portable binaries or building from source are the fallbacks.
+Daemon Pal is available for macOS and Linux (no Windows binaries yet). If the environment cannot run installers, using portable binaries or building from source are the fallbacks.
 
 ### Step 1: Install dpal
 
@@ -68,7 +70,7 @@ Select the installer from `assets[].name`, use its `browser_download_url`, and v
 | Debian/Ubuntu arm64 | `dpal_<version>_linux_arm64.deb` | `dpal_<version>_linux_arm64.tar.gz` or bare `dpal_<version>_linux_arm64` |
 | Fedora/RHEL amd64 | `dpal_<version>_linux_amd64.rpm` | `dpal_<version>_linux_amd64.tar.gz` or bare `dpal_<version>_linux_amd64` |
 | Fedora/RHEL arm64 | `dpal_<version>_linux_arm64.rpm` | `dpal_<version>_linux_arm64.tar.gz` or bare `dpal_<version>_linux_arm64` |
-| Raspberry Pi OS 32-bit (armhf) | `dpal_<version>_linux_armhf.deb` | `dpal_<version>_linux_armhf.tar.gz` or bare `dpal_<version>_linux_armhf` |
+| Debian/Ubuntu armhf | `dpal_<version>_linux_armhf.deb` | `dpal_<version>_linux_armhf.tar.gz` or bare `dpal_<version>_linux_armhf` |
 
 Use `uname -s` for OS and `uname -m` for CPU architecture. Map `x86_64` to `amd64`; map `aarch64` or `arm64` to `arm64`; map `armv6l` or `armv7l` to `armhf`. On Linux, inspect `/etc/os-release` to choose `.deb` for Debian/Ubuntu-family systems and `.rpm` for Fedora/RHEL-family systems.
 
@@ -92,13 +94,12 @@ Fedora/RHEL:
 sudo dnf install ./dpal_<version>_linux_amd64.rpm
 ```
 
-Portable tarball (Linux or macOS):
+Portable tarball (Linux or macOS). The archive extracts into a `dpal_<version>_<platform>/` directory, and the binary sits under `bin/` on Linux and under `usr/local/bin/` on macOS, so locate it instead of assuming a path:
 
 ```bash
 tar -xzf ./dpal_<version>_<platform>.tar.gz
-chmod +x ./dpal
 mkdir -p ~/.local/bin
-mv ./dpal ~/.local/bin/dpal
+install -m 755 "$(find ./dpal_<version>_<platform> -type f -path '*/bin/dpal')" ~/.local/bin/dpal
 ```
 
 Portable bare binary:
@@ -145,7 +146,7 @@ Exactly **one** command per executor invocation. `-D`, `-f`, and `-a` are modifi
 | `-C` | `--control` | Start the control process (daemon). |
 | `-D` | `--dir` | Working directory for this daemon. |
 | `-f` | `--force` | Start even if another daemon holds the workdir (recovery). |
-| `-i` | `--ini` | Load process list from an INI file at startup. |
+| `-i` | `--ini` | Load process list from an INI file at startup (relative paths resolve against the current directory; without `-i`, `<workdir>/dpal.ini` is loaded, created empty if missing). |
 | `-a` | `--auto-start` | Auto-start every process in the loaded list. |
 
 ### Executor commands
@@ -156,14 +157,33 @@ Exactly **one** command per executor invocation. `-D`, `-f`, and `-a` are modifi
 | `-s` | `--start` | targets / `-a` | Start process(es). |
 | `-t` | `--stop` | targets / `-a` | Stop process(es) with SIGTERM. |
 | `-r` | `--restart` | targets / `-a` | Stop then start process(es). |
-| `-c` | `--create` | `EXEC [args...]` | Add a new process definition. |
-| `-d` | `--delete` | targets / `-a` | Remove process(es) from the list. |
+| `-c` | `--create` | `EXEC [args...]` | Add a new process definition (stopped; start it with `-s`). |
+| `-d` | `--delete` | targets / `-a` | Remove stopped process(es) from the list. |
 | `-i` | `--import` | `FILE` | Import a process list from an INI file. |
 | `-e` | `--export` | `FILE` | Export the current process list to an INI file. |
 | `-p` | `--persist` | — | Save current list into workdir so it reloads on next daemon start. |
 | `-k` | `--kill` | — | Shut down the control process (stops all its processes). |
 
 Executor-only modifiers: `-D/--dir`, `-f/--force`, `-a/--all`.
+
+### Exit codes
+
+The executor exits `1` on usage errors, when no control process is running, when the control process reports an error (e.g. `Process not found`, `Cannot remove process`), or when it does not reply. With several targets, every target is still processed, and the exit code is `1` if any of them failed. The control process (`-C`) exits `1` if it cannot start, for example because another daemon holds the workdir or the INI file is missing or invalid.
+
+### Reading `-l` output
+
+```
+List all processes
+   1: ticker           RUNNING  [   1441 ]        1 ↻
+   3: crasher          RUNNING  [     -1 ]        6 ↻
+   4: sleep            STOPPED  [     -1 ]        0 ↻
+```
+
+The columns are ID, NAME, state, PID, and restart count (`↻`, which also counts manual `-r` restarts). `RUNNING` with PID `-1` means the process exited and is waiting `RestartSec` before it is respawned. A process that keeps crashing shows a growing `↻` count. `-l` also takes targets (`dpal -l web 3`).
+
+### Logs
+
+Each process gets its stdout and stderr captured into `<workdir>/log/<NAME>-out.log` and `<workdir>/log/<NAME>-err.log`. When `LogMaxSize` is set, these files rotate to `.0`, `.1`, … (up to `LogRotation` copies). To monitor a process, tail these files, e.g. `tail -f ~/.dpal/log/web-out.log`. dpal has no built-in log command.
 
 ## Common workflows
 
@@ -183,6 +203,8 @@ dpal -D /srv/myapp/.dpal -l -a       # query that specific daemon
 dpal -c /usr/bin/nginx -g "daemon off;"   # everything after EXEC is the new process's argv
 dpal -s nginx
 ```
+
+The NAME is derived from the basename of EXEC. Characters other than letters, digits, `_` and `-` become `_`, and a non-letter first character becomes `p` (`./srv.sh` → `srv_sh`). On a name collision, `-1`, `-2`, … is appended. The process gets `Dir=` set to the directory you ran `dpal -c` from, and no `Env=` or other attributes. To set those, write an INI file and import it with `-i`, or `-e` export, edit, delete, and re-import.
 
 **Inspect, control, and tear down:**
 ```bash
@@ -222,8 +244,7 @@ Dir=/opt
 Arg=ls
 Arg=-l
 Arg=-h
-; Memory cap in bytes, max log size before rotation, rotated logs to keep.
-MaxMemory=300000000
+; Max log size before rotation, rotated logs to keep.
 LogMaxSize=64
 LogRotation=3
 ; Delay in seconds before restart.
@@ -246,6 +267,9 @@ See `example/ecosystem.ini` in the repo for a working sample.
 - Always pass the **same `-D`** to the daemon and every executor command targeting it.
 - Don't combine two commands in one invocation — it errors with "Too many commands."
 - `-c/--create` consumes the rest of the command line as the new process's `EXEC` and argv; put it last.
+- `-d` refuses to delete a running process ("Cannot remove process"). Stop it with `-t` first.
+- `-p` writes `<workdir>/dpal.ini`. The next control process started without `-i` loads it, and with `-a` auto-starts it.
+- To monitor tasks, poll `dpal -l -a` (state, PID, restart count) and tail `<workdir>/log/<NAME>-{out,err}.log`. Don't assume a command succeeded unless its exit code is `0`.
 - `-k` is destructive (stops all supervised processes and the daemon). `-t -a` stops processes but leaves the daemon up. Confirm intent before running either against a live system.
 - `-f/--force` is a recovery escape hatch (reclaims workdir / clears hung queues); don't use it routinely.
 - Run `dpal -h` to print the authoritative built-in help if flags seem to differ from this summary.

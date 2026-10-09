@@ -1,6 +1,6 @@
 # @partoska/dpal-linux-arm
 
-This is the **Linux armhf (ARMv6+, 32-bit Raspberry Pi OS — including Pi Zero / Zero W)** native binary for
+This is the **Linux armhf (ARMv6+)** native binary for
 [`@partoska/dpal`](https://www.npmjs.com/package/@partoska/dpal).
 
 You should not install this package directly. Install the main package instead,

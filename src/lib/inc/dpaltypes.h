@@ -34,7 +34,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #define DP_API extern
-#define DP_VERSION "1.3.1"
+#define DP_VERSION "1.3.2"
 
 #define DP_NAME_MAX (64)
 #define DP_APP_MAX (1024)

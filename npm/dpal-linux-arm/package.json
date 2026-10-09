@@ -1,6 +1,6 @@
 {
   "name": "@partoska/dpal-linux-arm",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Linux armhf (ARMv6+) native binary for @partoska/dpal.",
   "os": [
     "linux"

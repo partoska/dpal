@@ -72,15 +72,17 @@ static const struct DPCOption cmdopts[]
         { "force", DPCNoArgument, NULL, 'f' },
         { NULL, 0, NULL, 0 } };
 
-static void
+static DPCStatus
 dpcCmdReplyWait (DPInt recvid)
 {
+  DPCStatus status = DPC_OK;
   DPDword attempts = 0;
   while (TRUE)
     {
       if (attempts >= WAIT_ATTEMPTS)
         {
           DPC_WARN ("Reply timeout");
+          status = DPC_EFAIL;
           break;
         }
 
@@ -114,6 +116,7 @@ dpcCmdReplyWait (DPInt recvid)
       if (reply.cmd == DPC_CERROR)
         {
           DPC_ERROR ("%s", reply.data.text);
+          status = DPC_EFAIL;
           continue;
         }
 
@@ -125,10 +128,12 @@ dpcCmdReplyWait (DPInt recvid)
       DPC_FATAL ("Unexpected reply");
       CLEAN_EXIT_WITH_FAIL (recvid)
     }
+
+  return status;
 }
 
 static DPSize
-dpcSerializeArgsSize (DPInt argc, DPChar *argv[])
+dpcSerializeArgsSize (const DPChar *dir, DPInt argc, DPChar *argv[])
 {
   DPSize result = 0;
 
@@ -146,11 +151,15 @@ dpcSerializeArgsSize (DPInt argc, DPChar *argv[])
       result += sz;
     }
 
+  // Finally, store the process directory with its length.
+  result += SIZEOF (DPSize) + dpcStrlen (dir) + 1;
+
   return result;
 }
 
 static void
-dpcSerializeArgs (DPChar *buff, DPSize size, DPInt argc, DPChar *argv[])
+dpcSerializeArgs (DPChar *buff, DPSize size, const DPChar *dir, DPInt argc,
+                  DPChar *argv[])
 {
   DPChar *ptr = buff;
   DPSize remaining = size;
@@ -188,6 +197,16 @@ dpcSerializeArgs (DPChar *buff, DPSize size, DPInt argc, DPChar *argv[])
       ptr += sz;
       remaining -= sz;
     }
+
+  // Finally, store the process directory with its length.
+  DPSize sz = dpcStrlen (dir) + 1;
+  if (remaining < SIZEOF (DPSize) + sz)
+    {
+      return;
+    }
+  dpcMemcpy (ptr, &sz, SIZEOF (DPSize));
+  ptr += SIZEOF (DPSize);
+  dpcMemcpy (ptr, dir, sz);
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -198,10 +217,12 @@ void
 dpcCmd (DPInt argc, DPChar *argv[])
 {
   DPChar workdir[WORKDIR_MAX] = { 0 };
+  DPChar cwd[WORKDIR_MAX] = { 0 };
   DPCMsgText req = { .cmd = DPC_CNONE, .text = { 0 } };
   DPChar *arg = req.text;
   DPBool applyall = FALSE;
   DPBool force = FALSE;
+  DPCStatus status = DPC_OK;
 
   // Read command line options.
   DPInt c;
@@ -363,8 +384,16 @@ dpcCmd (DPInt argc, DPChar *argv[])
           EXIT_WITH_FAILURE
         }
 
+      // The created process runs in the current directory of the caller.
+      if (dpcGetcwd (cwd, SIZEOF (cwd)) == NULL)
+        {
+          DPC_ERROR ("Cannot determine current directory");
+
+          EXIT_WITH_FAILURE
+        }
+
       // Check serialized arg size.
-      const DPSize sz = dpcSerializeArgsSize (argc - idx, &argv[idx]);
+      const DPSize sz = dpcSerializeArgsSize (cwd, argc - idx, &argv[idx]);
       if (sz > SIZEOF (req.text))
         {
           DPC_ERROR ("Process definition is too long");
@@ -469,19 +498,19 @@ dpcCmd (DPInt argc, DPChar *argv[])
       CHECK_POSIX (dpcMsgSnd (sendid, &req, SIZEOF (req.text)),
                    "Failed to send message", CLEAN_EXIT_WITH_FAIL (recvid));
 
-      dpcCmdReplyWait (recvid);
+      status = dpcCmdReplyWait (recvid);
     }
   else if (req.cmd == DPC_CCREATE)
     {
       // Length has been already validated.
-      dpcSerializeArgs (arg, SIZEOF (req.text), argc - idx, &argv[idx]);
+      dpcSerializeArgs (arg, SIZEOF (req.text), cwd, argc - idx, &argv[idx]);
 
       DPC_INFO ("%s process", dpcCommandStr (req.cmd));
 
       CHECK_POSIX (dpcMsgSnd (sendid, &req, SIZEOF (req.text)),
                    "Failed to send message", CLEAN_EXIT_WITH_FAIL (recvid));
 
-      dpcCmdReplyWait (recvid);
+      status = dpcCmdReplyWait (recvid);
     }
   else
     {
@@ -496,7 +525,11 @@ dpcCmd (DPInt argc, DPChar *argv[])
                        "Failed to send message",
                        CLEAN_EXIT_WITH_FAIL (recvid));
 
-          dpcCmdReplyWait (recvid);
+          // Keep processing remaining targets, but remember the failure.
+          if (dpcCmdReplyWait (recvid) != DPC_OK)
+            {
+              status = DPC_EFAIL;
+            }
 
           ++idx;
         }
@@ -506,6 +539,12 @@ dpcCmd (DPInt argc, DPChar *argv[])
   CHECK_POSIX (dpcMsgRm ((recvid)), "Failed to remove message queue",
                EXIT_WITH_FAILURE);
   DPC_DSLOW ("Removed id: %d", (recvid));
+
+  if (status != DPC_OK)
+    {
+      // The control process reported an error (or did not reply).
+      EXIT_WITH_FAILURE
+    }
 
   // Do not return. Always exit!
   EXIT_WITH_SUCCESS

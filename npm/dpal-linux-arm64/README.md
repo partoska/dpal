@@ -1,6 +1,6 @@
 # @partoska/dpal-linux-arm64
 
-This is the **Linux arm64 (64-bit Raspberry Pi OS, AWS Graviton, …)** native binary for
+This is the **Linux arm64** native binary for
 [`@partoska/dpal`](https://www.npmjs.com/package/@partoska/dpal).
 
 You should not install this package directly. Install the main package instead,

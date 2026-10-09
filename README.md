@@ -4,7 +4,7 @@
 
 # Daemon Pal
 
-[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.3.1)
+[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.3.2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 [![Build](https://github.com/partoska/dpal/actions/workflows/build.yml/badge.svg)](https://github.com/partoska/dpal/actions/workflows/build.yml)
 [![npm](https://img.shields.io/npm/v/@partoska/dpal.svg)](https://www.npmjs.com/package/@partoska/dpal)
@@ -23,10 +23,10 @@ Daemon Pal is a compact tool for process control designed to operate in two mode
 
 ## Supported Platforms
 
-| OS    | Architectures                                            |
-| ----- | -------------------------------------------------------- |
-| macOS | Universal (Intel & Apple Silicon), macOS 11+             |
-| Linux | amd64, arm64, armhf (ARMv6+, including every Raspberry Pi) |
+| OS    | Architectures                                |
+| ----- | -------------------------------------------- |
+| macOS | Universal (Intel & Apple Silicon), macOS 11+ |
+| Linux | amd64, arm64, armhf (ARMv6+)                 |
 
 ## Installation
 

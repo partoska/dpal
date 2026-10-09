@@ -24,7 +24,7 @@ restart, and persist long-running processes from your terminal.
 - Import/export of process lists via INI files.
 - Per-process memory limits, log rotation, and restart intervals.
 - Isolated working directories, so multiple control processes can coexist.
-- Works on macOS and Linux, including Raspberry Pi (arm64 and armhf).
+- Works on macOS and Linux (x64, arm64, armhf).
 
 ## Install
 
@@ -38,10 +38,10 @@ platform, selected automatically. No compiler or build tools are required — se
 
 ### Supported platforms
 
-| OS    | Architectures                                 |
-| ----- | --------------------------------------------- |
-| macOS | Intel & Apple Silicon                         |
-| Linux | x64, arm64, armhf (ARMv6+, e.g. Raspberry Pi) |
+| OS    | Architectures              |
+| ----- | -------------------------- |
+| macOS | Intel & Apple Silicon      |
+| Linux | x64, arm64, armhf (ARMv6+) |
 
 Windows is not supported (dpal relies on POSIX process control and SysV IPC).
 
@@ -125,7 +125,7 @@ matching your OS and CPU:
 - `@partoska/dpal-darwin` — macOS universal (Intel + Apple Silicon)
 - `@partoska/dpal-linux-x64`
 - `@partoska/dpal-linux-arm64`
-- `@partoska/dpal-linux-arm` — armhf (ARMv6+), e.g. 32-bit Raspberry Pi OS
+- `@partoska/dpal-linux-arm` — armhf (ARMv6+)
 
 When you run `dpal`, the launcher resolves the matching binary and, on Node
 22.15 or newer, replaces itself with it (`execve`), so the control process
