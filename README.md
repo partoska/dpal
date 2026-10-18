@@ -4,7 +4,7 @@
 
 # Daemon Pal
 
-[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.3.2)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.4.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 [![Build](https://github.com/partoska/dpal/actions/workflows/build.yml/badge.svg)](https://github.com/partoska/dpal/actions/workflows/build.yml)
 [![npm](https://img.shields.io/npm/v/@partoska/dpal.svg)](https://www.npmjs.com/package/@partoska/dpal)
@@ -92,9 +92,11 @@ Modify the behavior of a running control process. Processes can be specified by 
 
 ```bash
 dpal [-D workdir] [-f] COMMAND [-a]
+dpal [-D workdir] [-f] -l [-F format] [-a]
 dpal [-D workdir] [-f] -i | -e procs.ini
 dpal [-D workdir] [-f] -c EXEC [args...]
 dpal [-D workdir] [-f] -p | -k
+dpal [-D workdir] [-f] -L [-n lines] [--no-follow] [-a]
 ```
 
 Options:
@@ -111,6 +113,14 @@ Options:
 - `-r, --restart`: Terminates and restarts a process.
 - `-c, --create`: Adds a new process from EXEC path and arguments.
 - `-d, --delete`: Removes a process from the list.
+- `-L, --log`: Prints the last lines of the process logs and follows them
+  until interrupted. Each line is prefixed with the process name and `|` for
+  stdout or `!` for stderr.
+- `-n, --lines`: Number of last lines printed from each log with `-L`
+  (Default: 10).
+- `--no-follow`: Exits after printing the last lines with `-L`.
+- `-F, --format`: Output format of `-l`: `plain` (default), `json`, `csv`, or
+  `one` (process names only, one per line).
 
 ## Configuration
 
@@ -154,7 +164,12 @@ dpal -s nginx
 dpal -t -a
 ```
 
-7. Stop the control process:
+7. Follow the output of two processes:
+```bash
+dpal -L nginx worker
+```
+
+8. Stop the control process:
 ```bash
 dpal -k
 ```

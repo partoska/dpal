@@ -41,11 +41,12 @@
 
 typedef struct DPLog *DPLog;
 
-typedef enum DPELogType
-{
-  DP_LOG_STDOUT = 0x1,
-  DP_LOG_STDERR = 0x2,
-} DPLogType;
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * Declarations - Public
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+DP_API DPStatus dpLogPath (const DPChar *name, DPLogType type, DPChar *path,
+                           DPSize sz, DPSize *used);
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Declarations - Internal

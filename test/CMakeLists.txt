@@ -58,6 +58,29 @@ add_executable(test_advanced test_advanced.c)
 target_link_libraries(test_advanced dplib)
 target_include_directories(test_advanced PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/inc")
 
+add_executable(test_logpath test_logpath.c)
+target_link_libraries(test_logpath dplib)
+target_include_directories(test_logpath PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/inc")
+
+# Unit test of the CLI log follower, built from the CLI sources.
+set(CLI_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src/cli/src")
+add_executable(test_tail test_tail.c
+    ${CLI_SRC}/tail.c ${CLI_SRC}/plat.c ${CLI_SRC}/logger.c ${CLI_SRC}/check.c)
+target_link_libraries(test_tail dplib)
+target_include_directories(test_tail PUBLIC "${CLI_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/inc" "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/src")
+
+# Unit test of the CLI list output formats, built from the CLI sources.
+add_executable(test_list test_list.c
+    ${CLI_SRC}/list.c ${CLI_SRC}/util.c ${CLI_SRC}/plat.c ${CLI_SRC}/logger.c ${CLI_SRC}/check.c)
+target_link_libraries(test_list dplib)
+target_include_directories(test_list PUBLIC "${CLI_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/inc" "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib/src")
+
 add_test(NAME test_simple COMMAND test_simple)
 add_test(NAME test_loop COMMAND test_loop)
 add_test(NAME test_advanced COMMAND test_advanced)
+add_test(NAME test_logpath COMMAND test_logpath)
+add_test(NAME test_tail COMMAND test_tail)
+add_test(NAME test_list COMMAND test_list)
+
+# End-to-end test of the dpal executable against a live control process.
+add_test(NAME test_cli COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_cli.sh" $<TARGET_FILE:dpal>)

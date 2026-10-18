@@ -1021,7 +1021,9 @@ dpcCtrlLoop (const DPChar *workdir, DPInt recvid, DPBool autostart)
           DPInt sendid = dpcMsgInitSend (workdir);
           if (sendid < 0)
             {
-              dpcShutdown ();
+              // Nobody waits for the result anymore (e.g. the command
+              // process timed out). Keep supervising the processes.
+              DPC_WARN ("Skipping command: %s", dpcCommandStr (msg.cmd));
               continue;
             }
 

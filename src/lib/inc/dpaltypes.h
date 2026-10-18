@@ -34,13 +34,14 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #define DP_API extern
-#define DP_VERSION "1.3.2"
+#define DP_VERSION "1.4.0"
 
 #define DP_NAME_MAX (64)
 #define DP_APP_MAX (1024)
 #define DP_DIR_MAX (1024)
 #define DP_ARG_MAX (1024)
 #define DP_ENV_MAX (1024)
+#define DP_LOG_PATH_MAX (128)
 
 #ifdef __cplusplus
 extern "C"
@@ -110,6 +111,12 @@ extern "C"
     DP_STOPPED = 0x00,
     DP_RUNNING = 0x10
   } DPProcState;
+
+  typedef enum DPELogType
+  {
+    DP_LOG_STDOUT = 0x1,
+    DP_LOG_STDERR = 0x2,
+  } DPLogType;
 
   typedef DPInt DPPid;
   typedef DPInt DPFd;

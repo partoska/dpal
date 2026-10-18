@@ -58,6 +58,13 @@ struct DPCOption
   DPInt val;
 };
 
+typedef struct DPCFileStat
+{
+  DPQword dev;
+  DPQword ino;
+  DPQword size;
+} DPCFileStat;
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Declarations
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -66,6 +73,8 @@ struct DPCOption
 // Alloc
 // ===============================================================
 
+DP_API void *dpcCalloc (DPSize nitems, DPSize n);
+DP_API void *dpcRealloc (void *ptr, DPSize n);
 DP_API void dpcFree (void *ptr);
 
 // ===============================================================
@@ -74,6 +83,7 @@ DP_API void dpcFree (void *ptr);
 
 DP_API void *dpcMemcpy (void *restrict dst, const void *restrict src,
                         DPSize n);
+DP_API void *dpcMemset (void *dst, DPInt c, DPSize n);
 DP_API DPSize dpcStrlen (const DPChar *src);
 DP_API DPSize dpcStrnlen (const DPChar *src, DPSize max);
 DP_API DPChar *dpcStrncpy (DPChar *dst, const DPChar *src, DPSize n);
@@ -90,6 +100,7 @@ DP_API DPChar *dpcItoa10 (DPInt num, DPChar *str);
 
 DP_API void dpcExit (DPInt status);
 DP_API DPDword dpcSleep (DPDword sec);
+DP_API DPInt dpcUSleep (DPDword usec);
 DP_API DPInt dpcSigIntHandler (void (*handler) (DPInt));
 DP_API DPInt dpcSigTermHandler (void (*handler) (DPInt));
 
@@ -106,6 +117,19 @@ DP_API DPInt dpcUnlink (const DPChar *path);
 DP_API DPChar *dpcRealpath (const DPChar *restrict path,
                             DPChar *restrict resolved);
 DP_API DPChar *dpcRealpathne (const DPChar *path);
+
+// ===============================================================
+// Files
+// ===============================================================
+
+DP_API DPFd dpcStdout (void);
+DP_API DPFd dpcOpenRead (const DPChar *path);
+DP_API DPSSize dpcRead (DPFd fd, void *dst, DPSize n);
+DP_API DPSSize dpcWrite (DPFd fd, const void *src, DPSize n);
+DP_API DPInt dpcSeek (DPFd fd, DPQword off);
+DP_API DPInt dpcClose (DPFd fd);
+DP_API DPInt dpcStat (const DPChar *path, DPCFileStat *st);
+DP_API DPInt dpcFstat (DPFd fd, DPCFileStat *st);
 
 // ===============================================================
 // Environment

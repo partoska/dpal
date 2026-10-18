@@ -84,6 +84,9 @@ typedef enum DPCECmd
 
   DPC_CLIST,
   DPC_CREPLY,
+
+  // Handled by the command executor only, never sent to the control process.
+  DPC_CLOG,
 } DPCCmd;
 
 typedef struct DPCMsgProcInfo

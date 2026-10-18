@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/msg.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "plat.h"
@@ -49,6 +50,7 @@
 #include "plat/fork.h"
 #include "plat/io.h"
 #include "plat/str.h"
+#include "plat/time.h"
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Definitions
@@ -57,6 +59,18 @@
 // ===============================================================
 // Alloc
 // ===============================================================
+
+void *
+dpcCalloc (DPSize nitems, DPSize n)
+{
+  return calloc (nitems, n);
+}
+
+void *
+dpcRealloc (void *ptr, DPSize n)
+{
+  return realloc (ptr, n);
+}
 
 void
 dpcFree (void *ptr)
@@ -72,6 +86,12 @@ void *
 dpcMemcpy (void *restrict dst, const void *restrict src, DPSize n)
 {
   return dpMemcpy (dst, src, n);
+}
+
+void *
+dpcMemset (void *dst, DPInt c, DPSize n)
+{
+  return dpMemset (dst, c, n);
 }
 
 DPSize
@@ -142,6 +162,12 @@ DPDword
 dpcSleep (DPDword sec)
 {
   return sleep (sec);
+}
+
+DPInt
+dpcUSleep (DPDword usec)
+{
+  return dpUSleep (usec);
 }
 
 DPInt
@@ -293,6 +319,82 @@ dpcRealpathne (const DPChar *path)
   free (cbase);
 
   return result;
+}
+
+// ===============================================================
+// Files
+// ===============================================================
+
+DPFd
+dpcStdout (void)
+{
+  return DP_FD_STDOUT;
+}
+
+DPFd
+dpcOpenRead (const DPChar *path)
+{
+  return dpOpen (path, DP_O_RDONLY, 0);
+}
+
+DPSSize
+dpcRead (DPFd fd, void *dst, DPSize n)
+{
+  return dpRead (fd, dst, n);
+}
+
+DPSSize
+dpcWrite (DPFd fd, const void *src, DPSize n)
+{
+  return dpWrite (fd, src, n);
+}
+
+DPInt
+dpcSeek (DPFd fd, DPQword off)
+{
+  return lseek (fd, (off_t)off, SEEK_SET) < 0 ? -1 : 0;
+}
+
+DPInt
+dpcClose (DPFd fd)
+{
+  return dpClose (fd);
+}
+
+static void
+dpcFileStatFill (DPCFileStat *st, const struct stat *sb)
+{
+  st->dev = (DPQword)sb->st_dev;
+  st->ino = (DPQword)sb->st_ino;
+  st->size = (DPQword)sb->st_size;
+}
+
+DPInt
+dpcStat (const DPChar *path, DPCFileStat *st)
+{
+  struct stat sb;
+  if (stat (path, &sb) != 0)
+    {
+      return -1;
+    }
+
+  dpcFileStatFill (st, &sb);
+
+  return 0;
+}
+
+DPInt
+dpcFstat (DPFd fd, DPCFileStat *st)
+{
+  struct stat sb;
+  if (fstat (fd, &sb) != 0)
+    {
+      return -1;
+    }
+
+  dpcFileStatFill (st, &sb);
+
+  return 0;
 }
 
 // ===============================================================

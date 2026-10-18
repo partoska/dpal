@@ -136,8 +136,10 @@ dpcPrintHelp (const DPChar *name)
   DPC_INFO ("Usage:");
   DPC_INFO ("  %s -C [-D workdir] [-f] [-i procs.ini] [-a]", name);
   DPC_INFO ("  %s [-D workdir] [-f] COMMAND [-a]", name);
+  DPC_INFO ("  %s [-D workdir] [-f] -l [-F format] [-a]", name);
   DPC_INFO ("  %s [-D workdir] [-f] -i | -e procs.ini", name);
   DPC_INFO ("  %s [-D workdir] [-f] -p | -k", name);
+  DPC_INFO ("  %s [-D workdir] [-f] -L [-n lines] [--no-follow] [-a]", name);
   DPC_INFO ("");
   DPC_INFO ("General options:");
   DPC_INFO ("  -h/--help        Prints this help message.");
@@ -184,5 +186,19 @@ dpcPrintHelp (const DPChar *name)
   DPC_INFO ("  -t/--stop        Terminates a process by sending SIGTERM.");
   DPC_INFO ("  -r/--restart     Terminates and starts a process again.");
   DPC_INFO ("  -d/--delete      Removes a process from the list.");
+  DPC_INFO (
+      "  -L/--log         Prints the last lines of the process logs and");
+  DPC_INFO ("                   follows them until interrupted. Each line is");
+  DPC_INFO ("                   prefixed with the process name followed by");
+  DPC_INFO ("                   '|' for stdout or '!' for stderr.");
+  DPC_INFO ("");
+  DPC_INFO ("List command options:");
+  DPC_INFO ("  -F/--format      Output format: plain (default), json, csv,");
+  DPC_INFO ("                   or one (process names only, one per line).");
+  DPC_INFO ("");
+  DPC_INFO ("Log command options:");
+  DPC_INFO ("  -n/--lines       Number of last lines printed from each log.");
+  DPC_INFO ("                   Default: 10.");
+  DPC_INFO ("  --no-follow      Exits after printing the last lines.");
   DPC_INFO ("");
 }

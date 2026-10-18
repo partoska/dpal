@@ -33,9 +33,11 @@
 #include "dpaltypes.h"
 
 #include "check.h"
+#include "list.h"
 #include "logger.h"
 #include "msg.h"
 #include "plat.h"
+#include "tail.h"
 #include "util.h"
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -44,6 +46,9 @@
 
 #define WAIT_ATTEMPTS (3)
 #define SLOWDOWN_INTERVAL (1)
+#define LINES_DEFAULT (10)
+#define LINES_DIGITS_MAX (6)
+#define NO_FOLLOW_OPT (0x100)
 #define CLEAN_EXIT_WITH_FAIL(id)                                              \
   {                                                                           \
     CHECK_POSIX (dpcMsgRm ((id)), "Failed to remove message queue",           \
@@ -51,6 +56,12 @@
     DPC_DSLOW ("Removed msg id: %d", (id));                                   \
     EXIT_WITH_FAILURE                                                         \
   }
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * Types - Private
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+typedef DPInt (*DPCInfoHandler) (const DPCMsgProcInfo *info, void *ctx);
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Definitions - Private
@@ -68,13 +79,29 @@ static const struct DPCOption cmdopts[]
         { "import", DPCRequiredArgument, NULL, 'i' },
         { "export", DPCRequiredArgument, NULL, 'e' },
         { "kill", DPCNoArgument, NULL, 'k' },
+        { "log", DPCNoArgument, NULL, 'L' },
+        { "lines", DPCRequiredArgument, NULL, 'n' },
+        { "no-follow", DPCNoArgument, NULL, NO_FOLLOW_OPT },
         { "all", DPCNoArgument, NULL, 'a' },
         { "force", DPCNoArgument, NULL, 'f' },
+        { "format", DPCRequiredArgument, NULL, 'F' },
         { NULL, 0, NULL, 0 } };
 
-static DPCStatus
-dpcCmdReplyWait (DPInt recvid)
+static DPInt
+dpcCmdLogAdd (const DPCMsgProcInfo *info, void *ctx)
 {
+  DPChar name[CMD_NAME_MAX] = { 0 };
+  dpcStrncpy (name, info->name, CHARSMAX (name));
+
+  return dpcTailAdd ((DPCTail *)ctx, name);
+}
+
+static DPCStatus
+dpcCmdReplyWait (DPInt recvid, DPCInfoHandler handler, void *ctx)
+{
+  CHECK_GENERIC (handler != NULL, "Missing reply handler",
+                 RETURN_WITH_FAILURE);
+
   DPCStatus status = DPC_OK;
   DPDword attempts = 0;
   while (TRUE)
@@ -105,11 +132,10 @@ dpcCmdReplyWait (DPInt recvid)
 
       if (reply.cmd == DPC_CREPLY)
         {
-          DPCMsgProcInfo *info = &reply.data.pinfo;
-          DPC_INFO ("%4d: %-16s %-8s [ %6d ] %8u ↻", info->id, info->name,
-                    info->state == DP_STOPPED ? STATE_STOPPED_STR
-                                              : STATE_RUNNING_STR,
-                    info->pid, info->restarts);
+          if (handler (&reply.data.pinfo, ctx) < 0)
+            {
+              status = DPC_EFAIL;
+            }
           continue;
         }
 
@@ -130,6 +156,57 @@ dpcCmdReplyWait (DPInt recvid)
     }
 
   return status;
+}
+
+static DPBool
+dpcIsCount (const DPChar *num)
+{
+  DPSize len = dpcStrnlen (num, LINES_DIGITS_MAX + 1);
+  if (len == 0 || len > LINES_DIGITS_MAX)
+    {
+      return FALSE;
+    }
+
+  for (DPSize i = 0; i < len; ++i)
+    {
+      if (num[i] < '0' || num[i] > '9')
+        {
+          return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
+static void
+dpcCmdLog (DPCTail *tail, DPSize lines, DPBool follow)
+{
+  DPInt result = dpcTailStart (tail, lines);
+  if (result == DPC_OK)
+    {
+      result = dpcTailPoll (tail);
+    }
+
+  while (result == DPC_OK && follow)
+    {
+      dpcUSleep (TAIL_POLL_INTERVAL);
+
+      result = dpcTailPoll (tail);
+    }
+
+  if (result == DPC_OK)
+    {
+      result = dpcTailFlush (tail);
+    }
+
+  dpcTailDestroy (tail);
+
+  if (result != DPC_OK)
+    {
+      EXIT_WITH_FAILURE
+    }
+
+  EXIT_WITH_SUCCESS
 }
 
 static DPSize
@@ -222,14 +299,22 @@ dpcCmd (DPInt argc, DPChar *argv[])
   DPChar *arg = req.text;
   DPBool applyall = FALSE;
   DPBool force = FALSE;
+  DPSize lines = LINES_DEFAULT;
+  DPBool linesSet = FALSE;
+  DPBool follow = TRUE;
+  DPCTail tail = NULL;
+  DPCList list = { .fmt = DPC_FPLAIN, .count = 0 };
+  DPBool fmtSet = FALSE;
   DPCStatus status = DPC_OK;
 
   // Read command line options.
   DPInt c;
-  while ((c = dpcGetoptLong (argc, argv, "D:srtlcdpi:e:kaf", cmdopts, NULL))
-         != -1)
+  while (
+      (c = dpcGetoptLong (argc, argv, "D:srtlcdpi:e:kLn:afF:", cmdopts, NULL))
+      != -1)
     {
-      if (req.cmd != DPC_CNONE && c != 'D' && c != 'a' && c != 'f')
+      if (req.cmd != DPC_CNONE && c != 'D' && c != 'a' && c != 'f' && c != 'n'
+          && c != 'F' && c != NO_FOLLOW_OPT)
         {
           // Only one command is allowed ...
           DPC_ERROR ("Too many commands");
@@ -333,6 +418,45 @@ dpcCmd (DPInt argc, DPChar *argv[])
           req.cmd = DPC_CKILL;
           break;
 
+        case 'L':
+          DPC_DSLOW ("Arg: --log");
+          req.cmd = DPC_CLOG;
+          break;
+
+        case 'n':
+          optarg = dpcOptArg ();
+          DPC_DSLOW ("Arg: --lines=%s", optarg);
+          if (!dpcIsCount (optarg))
+            {
+              DPC_ERROR ("Invalid number of lines");
+
+              dpcPrintUsage (argv[0]);
+
+              EXIT_WITH_FAILURE
+            }
+          lines = dpcAtoi (optarg);
+          linesSet = TRUE;
+          break;
+
+        case NO_FOLLOW_OPT:
+          DPC_DSLOW ("Arg: --no-follow");
+          follow = FALSE;
+          break;
+
+        case 'F':
+          optarg = dpcOptArg ();
+          DPC_DSLOW ("Arg: --format=%s", optarg);
+          if (dpcListParseFmt (&list.fmt, optarg) != DPC_OK)
+            {
+              DPC_ERROR ("Invalid output format");
+
+              dpcPrintUsage (argv[0]);
+
+              EXIT_WITH_FAILURE
+            }
+          fmtSet = TRUE;
+          break;
+
         default:
           DPC_ERROR ("Unknown argument(s)");
 
@@ -351,6 +475,24 @@ dpcCmd (DPInt argc, DPChar *argv[])
     {
       // No command present ...
       DPC_ERROR ("Missing command");
+
+      dpcPrintUsage (argv[0]);
+
+      EXIT_WITH_FAILURE
+    }
+
+  if (req.cmd != DPC_CLOG && (linesSet || !follow))
+    {
+      DPC_ERROR ("Options --lines and --no-follow require --log");
+
+      dpcPrintUsage (argv[0]);
+
+      EXIT_WITH_FAILURE
+    }
+
+  if (req.cmd != DPC_CLIST && fmtSet)
+    {
+      DPC_ERROR ("Option --format requires --list");
 
       dpcPrintUsage (argv[0]);
 
@@ -468,11 +610,40 @@ dpcCmd (DPInt argc, DPChar *argv[])
                CLEAN_EXIT_WITH_FAIL (recvid));
   DPC_DSLOW ("Send msg id: %d", sendid);
 
+  // The log command only resolves its targets via the list command. Its log
+  // files are followed directly once the reply queue is released.
+  const DPBool logmode = req.cmd == DPC_CLOG;
+  DPCInfoHandler handler = dpcListRow;
+  void *ctx = &list;
+  if (logmode)
+    {
+      req.cmd = DPC_CLIST;
+      handler = dpcCmdLogAdd;
+      ctx = &tail;
+
+      if (dpcTailInit (&tail, workdir, dpcStdout ()) < 0)
+        {
+          CLEAN_EXIT_WITH_FAIL (recvid)
+        }
+    }
+
   if (req.cmd == DPC_CIMPORT || req.cmd == DPC_CEXPORT
       || req.cmd == DPC_CPERSIST || req.cmd == DPC_CKILL || applyall)
     {
-      switch (req.cmd)
+      switch (logmode ? DPC_CLOG : req.cmd)
         {
+        case DPC_CLOG:
+          // Keep the output clean for the log lines.
+          break;
+
+        case DPC_CLIST:
+          // Keep the output clean for the machine-readable formats.
+          if (list.fmt == DPC_FPLAIN)
+            {
+              DPC_INFO ("%s all processes", dpcCommandStr (req.cmd));
+            }
+          break;
+
         case DPC_CIMPORT:
           DPC_INFO ("Importing from file: %s", arg);
           break;
@@ -495,10 +666,15 @@ dpcCmd (DPInt argc, DPChar *argv[])
           break;
         }
 
+      if (!logmode)
+        {
+          dpcListHeader (&list);
+        }
+
       CHECK_POSIX (dpcMsgSnd (sendid, &req, SIZEOF (req.text)),
                    "Failed to send message", CLEAN_EXIT_WITH_FAIL (recvid));
 
-      status = dpcCmdReplyWait (recvid);
+      status = dpcCmdReplyWait (recvid, handler, ctx);
     }
   else if (req.cmd == DPC_CCREATE)
     {
@@ -510,29 +686,43 @@ dpcCmd (DPInt argc, DPChar *argv[])
       CHECK_POSIX (dpcMsgSnd (sendid, &req, SIZEOF (req.text)),
                    "Failed to send message", CLEAN_EXIT_WITH_FAIL (recvid));
 
-      status = dpcCmdReplyWait (recvid);
+      status = dpcCmdReplyWait (recvid, handler, ctx);
     }
   else
     {
+      if (!logmode)
+        {
+          dpcListHeader (&list);
+        }
+
       while (idx < argc)
         {
           // Length has been already validated.
           dpcStrncpy (arg, argv[idx], CHARSMAX (req.text));
 
-          DPC_INFO ("%s process: %s", dpcCommandStr (req.cmd), arg);
+          if (!logmode && list.fmt == DPC_FPLAIN)
+            {
+              DPC_INFO ("%s process: %s", dpcCommandStr (req.cmd), arg);
+            }
 
           CHECK_POSIX (dpcMsgSnd (sendid, &req, SIZEOF (req.text)),
                        "Failed to send message",
                        CLEAN_EXIT_WITH_FAIL (recvid));
 
           // Keep processing remaining targets, but remember the failure.
-          if (dpcCmdReplyWait (recvid) != DPC_OK)
+          if (dpcCmdReplyWait (recvid, handler, ctx) != DPC_OK)
             {
               status = DPC_EFAIL;
             }
 
           ++idx;
         }
+    }
+
+  // Close the list even on failure so the output stays well-formed.
+  if (!logmode)
+    {
+      dpcListFooter (&list);
     }
 
   // Remove message queue.
@@ -543,7 +733,15 @@ dpcCmd (DPInt argc, DPChar *argv[])
   if (status != DPC_OK)
     {
       // The control process reported an error (or did not reply).
+      dpcTailDestroy (&tail);
+
       EXIT_WITH_FAILURE
+    }
+
+  if (logmode)
+    {
+      // Does not return.
+      dpcCmdLog (&tail, lines, follow);
     }
 
   // Do not return. Always exit!

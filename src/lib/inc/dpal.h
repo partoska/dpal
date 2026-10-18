@@ -643,6 +643,30 @@ extern "C"
    */
   DP_API DPStatus dpProcInfoGetPid (const DPProcInfo *info, DPPid *pid);
 
+  /**
+   * @brief Gets the path of the log file capturing a process output.
+   *
+   * The path is relative to the working directory of the process manager
+   * (the directory the control process runs in). Only the current log file
+   * is returned; rotated files carry an additional numeric suffix. This
+   * function does not require the library to be initialized.
+   *
+   * @param[in] name Process name.
+   * @param[in] type Captured output stream (DP_LOG_STDOUT or DP_LOG_STDERR).
+   * @param[out] path Buffer to store the log file path (DP_LOG_PATH_MAX bytes
+   * are always sufficient).
+   * @param[in] sz Size of the buffer in bytes.
+   * @param[out] used Pointer to store the number of bytes required for the
+   * path including the null terminator, if not NULL. Set also when the buffer
+   * is too small.
+   *
+   * @return On success, the function returns 0; on error, it returns a
+   * negative error number. Returns DP_EINVALID for an invalid process name or
+   * stream type, and DP_ETOOLONG if the buffer is too small.
+   */
+  DP_API DPStatus dpLogPath (const DPChar *name, DPLogType type, DPChar *path,
+                             DPSize sz, DPSize *used);
+
 #ifdef __cplusplus
 }
 #endif

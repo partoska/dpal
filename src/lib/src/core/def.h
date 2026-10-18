@@ -80,6 +80,7 @@ DP_API DPStatus dpProcDefGetEnv (const DPProcDef *def, DPChar *env, DPByte idx,
  * Declarations - Internal
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+DP_API DPStatus dpProcDefCheckName (const DPChar *name);
 DP_API DPStatus dpProcDefInitEx (DPProcDef *def, const DPChar *name,
                                  const DPChar *app, const DPChar *dir,
                                  const DPChar *const args[],

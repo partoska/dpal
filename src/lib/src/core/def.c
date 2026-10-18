@@ -52,54 +52,6 @@ struct DPSProcDef
 };
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- * Definitions - Private
- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
-static DPStatus
-dpCheckName (const DPChar *name)
-{
-  CHECK_NULL_RETURN (name);
-
-  CHECK_RETURN ((name[0] >= 'A' && name[0] <= 'Z')
-                    || (name[0] >= 'a' && name[0] <= 'z'),
-                DP_EINVALID);
-
-  DPSize i = 0;
-  while (name[i] != '\0')
-    {
-      do
-        {
-          if (name[i] >= 'A' && name[i] <= 'Z')
-            {
-              break;
-            }
-
-          if (name[i] >= 'a' && name[i] <= 'z')
-            {
-              break;
-            }
-
-          if (name[i] >= '0' && name[i] <= '9')
-            {
-              break;
-            }
-
-          if (name[i] == '_' || name[i] == '-')
-            {
-              break;
-            }
-
-          SET_ERROR_RETURN (DP_EINVALID, "Name contains invalid chars");
-        }
-      while (FALSE);
-
-      ++i;
-    }
-
-  return DP_OK;
-}
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Definitions - Public
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -281,6 +233,50 @@ dpProcDefGetEnv (const DPProcDef *def, DPChar *env, DPByte idx, DPSize sz,
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 DPStatus
+dpProcDefCheckName (const DPChar *name)
+{
+  CHECK_NULL_RETURN (name);
+
+  CHECK_RETURN ((name[0] >= 'A' && name[0] <= 'Z')
+                    || (name[0] >= 'a' && name[0] <= 'z'),
+                DP_EINVALID);
+
+  DPSize i = 0;
+  while (name[i] != '\0')
+    {
+      do
+        {
+          if (name[i] >= 'A' && name[i] <= 'Z')
+            {
+              break;
+            }
+
+          if (name[i] >= 'a' && name[i] <= 'z')
+            {
+              break;
+            }
+
+          if (name[i] >= '0' && name[i] <= '9')
+            {
+              break;
+            }
+
+          if (name[i] == '_' || name[i] == '-')
+            {
+              break;
+            }
+
+          SET_ERROR_RETURN (DP_EINVALID, "Name contains invalid chars");
+        }
+      while (FALSE);
+
+      ++i;
+    }
+
+  return DP_OK;
+}
+
+DPStatus
 dpProcDefInitEx (DPProcDef *def, const DPChar *name, const DPChar *app,
                  const DPChar *dir, const DPChar *const args[],
                  const DPChar *const envs[])
@@ -293,7 +289,7 @@ dpProcDefInitEx (DPProcDef *def, const DPChar *name, const DPChar *app,
   DPSize nameLen = dpStrnlen (name, DEF_NAME_MAX);
   CHECK_RETURN (nameLen < DEF_NAME_MAX, DP_ETOOLONG);
   CHECK_RETURN (nameLen > 0, DP_EINVALID);
-  CHECK_STATUS_RETURN (dpCheckName (name));
+  CHECK_STATUS_RETURN (dpProcDefCheckName (name));
 
   DPSize appLen = dpStrnlen (app, DEF_APP_MAX);
   CHECK_RETURN (appLen < DEF_APP_MAX, DP_ETOOLONG);

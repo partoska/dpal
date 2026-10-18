@@ -54,6 +54,8 @@ static const DPChar *DPC_COMMAND_STR[] = {
   [DPC_CKILL] = "Kill",
 
   [DPC_CLIST] = "List",         [DPC_CREPLY] = "[REPLY]",
+
+  [DPC_CLOG] = "Log",
 };
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *

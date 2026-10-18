@@ -52,7 +52,7 @@ add_executable(dpal
     src/msg.h src/msg.c src/logger.h src/logger.c src/plat.h src/plat.c src/check.h src/check.c
 
     # Business
-    src/util.h src/util.c src/ctrl.h src/ctrl.c src/cmd.h src/cmd.c src/entry.c)
+    src/util.h src/util.c src/list.h src/list.c src/tail.h src/tail.c src/ctrl.h src/ctrl.c src/cmd.h src/cmd.c src/entry.c)
 
 target_link_libraries(dpal dplib)
 target_include_directories(dpal PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../lib/inc" "${CMAKE_CURRENT_SOURCE_DIR}/../lib/src")

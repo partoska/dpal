@@ -79,6 +79,8 @@ COMPILE_ASSERT (SIZEOF (STDERR_SUFFIX) < (LOG_SUFFIX_MAX) - (BYTE_CHAR_MAX));
 
 COMPILE_ASSERT (SIZEOF (LOG_DIR) < LOG_DIR_MAX);
 
+COMPILE_ASSERT (LOG_MAX <= DP_LOG_PATH_MAX);
+
 static DPStatus
 dpLogRotClean (DPChar *filepath, DPByte from, DPByte to)
 {
@@ -104,14 +106,19 @@ dpLogRotClean (DPChar *filepath, DPByte from, DPByte to)
   return DP_OK;
 }
 
-static DPChar *
-dpStrncatTypeSuffix (DPChar *filepath, DPLogType type)
+static DPStatus
+dpLogDirCreate (void)
 {
-  const DPChar *suffix = type == DP_LOG_STDOUT ? STDOUT_SUFFIX : STDERR_SUFFIX;
-  const DPSize suffixLen = type == DP_LOG_STDOUT ? CHARSMAX (STDOUT_SUFFIX)
-                                                 : CHARSMAX (STDERR_SUFFIX);
+  if (dpDirExists (LOG_DIR))
+    {
+      return DP_OK;
+    }
 
-  return dpStrncat (filepath, suffix, suffixLen);
+  DP_DSLOW ("dpLogDirCreate: Creating logdir: %s", LOG_DIR);
+
+  CHECK_RETURN (dpMkdir (LOG_DIR, DP_S_IRWXU) == 0, DP_ELOG);
+
+  return DP_OK;
 }
 
 static DPStatus
@@ -124,27 +131,19 @@ dpLogRot (const DPLog *log)
   CHECK_RETURN (dpClose ((*log)->fd) == 0, DP_EFD);
   (*log)->fd = DP_FD_INVALID;
 
+  CHECK_STATUS_RETURN (dpLogDirCreate ());
+
   DPChar *filepath = (DPChar *)dpCalloc (LOG_MAX, SIZEOF (DPChar));
   CHECK_ALLOC_RETURN (filepath);
 
-  // Make a log dir path and eventually create the directory.
-  dpStrncat (filepath, LOG_DIR, CHARSMAX (LOG_DIR));
-  if (!dpDirExists (filepath))
+  DPStatus status
+      = dpLogPath ((*log)->name, (*log)->type, filepath, LOG_MAX, NULL);
+  if (status != DP_OK)
     {
-      DP_DSLOW ("dpLogRot: Creating logdir: %s", filepath);
+      dpFree (filepath);
 
-      if (dpMkdir (filepath, DP_S_IRWXU) != 0)
-        {
-          dpFree (filepath);
-
-          SET_ERROR_RETURN (DP_ELOG,
-                            "Condition: (dpMkdir (filepath, S_IRWXU) != 0)");
-        }
+      return status;
     }
-
-  // Now, append the log name.
-  dpStrncat (filepath, (*log)->name, DEF_NAME_MAX);
-  dpStrncatTypeSuffix (filepath, (*log)->type);
   DPSize filepathLen = dpStrnlen (filepath, LOG_MAX);
 
   // First, check whether we do rotations at all.
@@ -244,6 +243,43 @@ dpLogRot (const DPLog *log)
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * Definitions - Public
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+DPStatus
+dpLogPath (const DPChar *name, DPLogType type, DPChar *path, DPSize sz,
+           DPSize *used)
+{
+  CHECK_NULL_RETURN (name);
+  CHECK_NULL_RETURN (path);
+  CHECK_RETURN (type == DP_LOG_STDOUT || type == DP_LOG_STDERR, DP_EINVALID);
+
+  // Validate the name, so the path cannot escape the log directory.
+  DPSize nameLen = dpStrnlen (name, DEF_NAME_MAX);
+  CHECK_RETURN (nameLen < DEF_NAME_MAX, DP_ETOOLONG);
+  CHECK_STATUS_RETURN (dpProcDefCheckName (name));
+
+  const DPChar *suffix = type == DP_LOG_STDOUT ? STDOUT_SUFFIX : STDERR_SUFFIX;
+  const DPSize suffixLen = type == DP_LOG_STDOUT ? CHARSMAX (STDOUT_SUFFIX)
+                                                 : CHARSMAX (STDERR_SUFFIX);
+
+  // +1 for NULL terminator.
+  const DPSize pathLen = CHARSMAX (LOG_DIR) + nameLen + suffixLen + 1;
+  if (used != NULL)
+    {
+      *used = pathLen;
+    }
+  CHECK_RETURN (pathLen <= sz, DP_ETOOLONG);
+
+  path[0] = '\0';
+  dpStrncat (path, LOG_DIR, CHARSMAX (LOG_DIR));
+  dpStrncat (path, name, nameLen);
+  dpStrncat (path, suffix, suffixLen);
+
+  return DP_OK;
+}
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Definitions - Internal
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -295,28 +331,19 @@ dpLogStart (DPLog *log)
   CHECK_NULL_RETURN (*log);
 
   CHECK_RETURN (!dpIsFdValid ((*log)->fd), DP_ELOG);
+  CHECK_STATUS_RETURN (dpLogDirCreate ());
 
   DPChar *filepath = (DPChar *)dpCalloc (LOG_MAX, SIZEOF (DPChar));
   CHECK_ALLOC_RETURN (filepath);
 
-  // Make a log dir path and eventually create the directory.
-  dpStrncat (filepath, LOG_DIR, CHARSMAX (LOG_DIR));
-  if (!dpDirExists (filepath))
+  DPStatus status
+      = dpLogPath ((*log)->name, (*log)->type, filepath, LOG_MAX, NULL);
+  if (status != DP_OK)
     {
-      DP_DSLOW ("dpLogStart: Creating logdir: %s", filepath);
+      dpFree (filepath);
 
-      if (dpMkdir (filepath, DP_S_IRWXU) != 0)
-        {
-          dpFree (filepath);
-
-          SET_ERROR_RETURN (DP_ELOG,
-                            "Condition: (dpMkdir (filepath, S_IRWXU) != 0)");
-        }
+      return status;
     }
-
-  // Now, append the log name.
-  dpStrncat (filepath, (*log)->name, DEF_NAME_MAX);
-  dpStrncatTypeSuffix (filepath, (*log)->type);
 
   (*log)->fd = dpOpen (filepath, DP_O_CREAT | DP_O_APPEND | DP_O_RDWR,
                        DP_S_IRUSR | DP_S_IWUSR);

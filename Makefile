@@ -28,7 +28,7 @@
 # Project configuration.
 PROJECT = dpal
 LIBRARY = dplib
-VERSION = 1.3.2
+VERSION = 1.4.0
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
@@ -77,6 +77,8 @@ CLI_SRCS = $(SRCDIR)/cli/src/msg.c \
            $(SRCDIR)/cli/src/plat.c \
            $(SRCDIR)/cli/src/check.c \
            $(SRCDIR)/cli/src/util.c \
+           $(SRCDIR)/cli/src/list.c \
+           $(SRCDIR)/cli/src/tail.c \
            $(SRCDIR)/cli/src/ctrl.c \
            $(SRCDIR)/cli/src/cmd.c \
            $(SRCDIR)/cli/src/entry.c
@@ -145,7 +147,16 @@ TESTBINDIR = $(BUILDDIR)/test
 TEST_CFLAGS = $(CFLAGS_COMMON) $(CFLAGS_BUILD) -I$(SRCDIR)/lib/inc
 TEST_BINS = $(TESTBINDIR)/test_simple \
             $(TESTBINDIR)/test_loop \
-            $(TESTBINDIR)/test_advanced
+            $(TESTBINDIR)/test_advanced \
+            $(TESTBINDIR)/test_logpath \
+            $(TESTBINDIR)/test_tail \
+            $(TESTBINDIR)/test_list
+
+# CLI unit tests are built directly from the CLI sources.
+TEST_CLI_CFLAGS = $(TEST_CFLAGS) -I$(SRCDIR)/cli/src -I$(SRCDIR)/lib/src
+TEST_CLI_OBJS = $(OBJDIR)/cli/src/plat.o \
+                $(OBJDIR)/cli/src/logger.o \
+                $(OBJDIR)/cli/src/check.o
 
 # Aggregate dependency files.
 DEPS = $(OBJS:.o=.d)
@@ -189,6 +200,17 @@ $(TESTBINDIR)/%: $(TESTDIR)/%.c $(LIBTARGET) | $(TESTBINDIR)
 	@echo "Building test $*..."
 	$(CC) $(TEST_CFLAGS) $< $(LIBTARGET) -o $@ $(LDFLAGS)
 
+$(TESTBINDIR)/test_tail: $(TESTDIR)/test_tail.c $(OBJDIR)/cli/src/tail.o \
+                         $(TEST_CLI_OBJS) $(LIBTARGET) | $(TESTBINDIR)
+	@echo "Building test test_tail..."
+	$(CC) $(TEST_CLI_CFLAGS) $< $(filter %.o,$^) $(LIBTARGET) -o $@ $(LDFLAGS)
+
+$(TESTBINDIR)/test_list: $(TESTDIR)/test_list.c $(OBJDIR)/cli/src/list.o \
+                         $(OBJDIR)/cli/src/util.o $(TEST_CLI_OBJS) \
+                         $(LIBTARGET) | $(TESTBINDIR)
+	@echo "Building test test_list..."
+	$(CC) $(TEST_CLI_CFLAGS) $< $(filter %.o,$^) $(LIBTARGET) -o $@ $(LDFLAGS)
+
 # Clean build artifacts.
 clean:
 	@echo "Cleaning build artifacts..."
@@ -224,11 +246,12 @@ release:
 
 tests: $(TEST_BINS)
 
-test: tests
+test: tests $(TARGET)
 	@failed=0; \
 	for t in $(TEST_BINS); do \
 	    $$t || failed=1; \
 	done; \
+	bash $(TESTDIR)/test_cli.sh $(TARGET) || failed=1; \
 	if [ $$failed -eq 0 ]; then echo "All tests passed."; else echo "Some tests FAILED."; exit 1; fi
 
 # Help target.
@@ -243,7 +266,7 @@ help:
 	@echo "  make install-strip          Install and strip binary."
 	@echo "  make uninstall              Remove installed binary."
 	@echo "  make tests                  Build unit test binaries."
-	@echo "  make test                   Build and run unit tests."
+	@echo "  make test                   Build and run unit and CLI tests."
 	@echo "  make help                   Show this help message."
 	@echo ""
 	@echo "Build options (set as environment variables or make arguments):"

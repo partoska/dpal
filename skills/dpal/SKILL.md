@@ -1,6 +1,6 @@
 ---
 name: dpal
-description: Use the Daemon Pal (dpal) CLI to manage process lifecycles — start a control process, then add, start, stop, restart, list, delete, import/export, and persist managed processes. Use when the user wants to run, supervise, or script long-running processes with dpal.
+description: Use the Daemon Pal (dpal) CLI to manage process lifecycles — start a control process, then add, start, stop, restart, list, delete, import/export, persist, and read the logs of managed processes. Use when the user wants to run, supervise, or script long-running processes with dpal.
 license: MIT
 metadata:
   author: Partoska Laboratory
@@ -163,8 +163,18 @@ Exactly **one** command per executor invocation. `-D`, `-f`, and `-a` are modifi
 | `-e` | `--export` | `FILE` | Export the current process list to an INI file. |
 | `-p` | `--persist` | — | Save current list into workdir so it reloads on next daemon start. |
 | `-k` | `--kill` | — | Shut down the control process (stops all its processes). |
+| `-L` | `--log` | targets / `-a` | Print the last lines of the process logs, then follow them until interrupted. |
 
-Executor-only modifiers: `-D/--dir`, `-f/--force`, `-a/--all`.
+### Executor modifiers
+
+| Flag | Long | Meaning |
+|------|------|---------|
+| `-D` | `--dir` | Working directory of the control process to talk to. |
+| `-f` | `--force` | Run even if another command holds the workdir (recovery). |
+| `-a` | `--all` | Apply the command to all processes instead of named targets. |
+| `-n` | `--lines N` | With `-L`: number of last lines printed from each log (default 10). |
+| | `--no-follow` | With `-L`: print the last lines and exit. |
+| `-F` | `--format FMT` | With `-l`: output format, `plain` (default), `json`, `csv`, or `one`. |
 
 ### Exit codes
 
@@ -181,9 +191,39 @@ List all processes
 
 The columns are ID, NAME, state, PID, and restart count (`↻`, which also counts manual `-r` restarts). `RUNNING` with PID `-1` means the process exited and is waiting `RestartSec` before it is respawned. A process that keeps crashing shows a growing `↻` count. `-l` also takes targets (`dpal -l web 3`).
 
+For scripting, use `-F/--format`, which drops the `List ...` status lines and prints only the processes to stdout (errors still go to stderr):
+
+```
+$ dpal -l -a -F json
+[
+  {"id":1,"name":"ticker","state":"running","pid":1441,"restarts":1},
+  {"id":4,"name":"sleep","state":"stopped","pid":-1,"restarts":0}
+]
+$ dpal -l -a -F csv
+id,name,state,pid,restarts
+1,"ticker",running,1441,1
+4,"sleep",stopped,-1,0
+$ dpal -l -a -F one
+ticker
+sleep
+```
+
+The JSON array stays well-formed even when a target is not found (the exit code is still `1`).
+
 ### Logs
 
-Each process gets its stdout and stderr captured into `<workdir>/log/<NAME>-out.log` and `<workdir>/log/<NAME>-err.log`. When `LogMaxSize` is set, these files rotate to `.0`, `.1`, … (up to `LogRotation` copies). To monitor a process, tail these files, e.g. `tail -f ~/.dpal/log/web-out.log`. dpal has no built-in log command.
+Each process gets its stdout and stderr captured into `<workdir>/log/<NAME>-out.log` and `<workdir>/log/<NAME>-err.log`. When `LogMaxSize` is set, these files rotate to `.0`, `.1`, … (up to `LogRotation` copies). To monitor processes, use `-L`:
+
+```
+$ dpal -L web worker -n 2 --no-follow
+web    | GET /health 200
+web    | GET /api/items 200
+web    ! warning: slow query
+worker | job 41 done
+worker | job 42 done
+```
+
+Each line is prefixed with the process name (padded to the longest one) and `|` for stdout or `!` for stderr. The last `-n` lines of each log are printed one log after another, then new lines are printed as they arrive. Lines from different processes are ordered by arrival only (the logs carry no timestamps). Rotation is followed, including several rotations between two polls (every 200 ms), but output that rotates through all `LogRotation` files that fast is deleted before it can be printed. The backlog reaches into the rotated files, so with a tiny `LogMaxSize` its first line may be cut off where the oldest retained data begins. The process names are resolved once at startup, so `-L -a` does not pick up processes created later. While following, other dpal commands work normally.
 
 ## Common workflows
 
@@ -269,7 +309,7 @@ See `example/ecosystem.ini` in the repo for a working sample.
 - `-c/--create` consumes the rest of the command line as the new process's `EXEC` and argv; put it last.
 - `-d` refuses to delete a running process ("Cannot remove process"). Stop it with `-t` first.
 - `-p` writes `<workdir>/dpal.ini`. The next control process started without `-i` loads it, and with `-a` auto-starts it.
-- To monitor tasks, poll `dpal -l -a` (state, PID, restart count) and tail `<workdir>/log/<NAME>-{out,err}.log`. Don't assume a command succeeded unless its exit code is `0`.
+- To monitor tasks, poll `dpal -l -a` (state, PID, restart count) and read logs with `dpal -L NAME --no-follow -n N`. Without `--no-follow`, `-L` runs until interrupted, so don't run it in the foreground of a non-interactive shell. Don't assume a command succeeded unless its exit code is `0`.
 - `-k` is destructive (stops all supervised processes and the daemon). `-t -a` stops processes but leaves the daemon up. Confirm intent before running either against a live system.
 - `-f/--force` is a recovery escape hatch (reclaims workdir / clears hung queues); don't use it routinely.
 - Run `dpal -h` to print the authoritative built-in help if flags seem to differ from this summary.
