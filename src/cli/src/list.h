@@ -53,6 +53,7 @@ typedef struct DPCList
 {
   DPCFmt fmt;
   DPSize count;
+  DPCMsgProcInfo prev;
 } DPCList;
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *

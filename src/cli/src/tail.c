@@ -70,6 +70,7 @@ typedef struct DPCTailStream
   DPLogType type;
   DPFd fd;
   DPCFileStat last;
+  DPFd headfd;
   DPCFileStat head;
   DPQword off;
   DPChar line[TAIL_LINE_MAX];
@@ -279,10 +280,18 @@ dpcTailSameFile (const DPCFileStat *a, const DPCFileStat *b)
 static void
 dpcTailHead (DPCTailStream *stream)
 {
-  // Remember the newest rotated file, files rotated after it are new.
+  // Remember the newest rotated file, files rotated after it are new. It is
+  // kept open, so its inode cannot be reused by a newer file once it gets
+  // rotated out (e.g. on ext4).
+  if (stream->headfd != TAIL_FD_INVALID)
+    {
+      dpcClose (stream->headfd);
+    }
+
   DPChar path[TAIL_ROT_PATH_MAX];
   dpcTailRotPath (stream, 0, path);
-  if (dpcStat (path, &stream->head) < 0)
+  stream->headfd = dpcTailOpenFile (path, &stream->head);
+  if (stream->headfd == TAIL_FD_INVALID)
     {
       dpcMemset (&stream->head, 0x0, SIZEOF (stream->head));
     }
@@ -610,24 +619,24 @@ dpcTailPollStream (DPCTail *tail, DPCTailStream *stream)
           return DPC_EFAIL;
         }
 
-      // The file was rotated or removed. A line split by the rotation
-      // continues in the newer files, so its pending part is kept.
-      if (eof && (!exists || !dpcTailSameFile (&stream->last, &cur)))
+      // The file was rotated. A line split by the rotation continues in the
+      // newer files, so its pending part is kept. The old file is closed only
+      // after the catch-up, so its inode cannot be reused by a newer file
+      // meanwhile (e.g. on ext4). For the same reason, a removed file is kept
+      // open until a new one appears.
+      if (eof && exists && !dpcTailSameFile (&stream->last, &cur))
         {
+          if (dpcTailCatchUp (tail, stream, &got) < 0)
+            {
+              return DPC_EFAIL;
+            }
+
           dpcTailClose (stream);
 
-          if (exists)
+          if (dpcTailOpen (stream) == DPC_OK
+              && dpcTailDrain (tail, stream, &got, &eof) < 0)
             {
-              if (dpcTailCatchUp (tail, stream, &got) < 0)
-                {
-                  return DPC_EFAIL;
-                }
-
-              if (dpcTailOpen (stream) == DPC_OK
-                  && dpcTailDrain (tail, stream, &got, &eof) < 0)
-                {
-                  return DPC_EFAIL;
-                }
+              return DPC_EFAIL;
             }
         }
     }
@@ -678,7 +687,12 @@ dpcTailDestroy (DPCTail *tail)
 
   for (DPSize i = 0; i < (*tail)->count; ++i)
     {
-      dpcTailClose (&(*tail)->streams[i]);
+      DPCTailStream *stream = &(*tail)->streams[i];
+      dpcTailClose (stream);
+      if (stream->headfd != TAIL_FD_INVALID)
+        {
+          dpcClose (stream->headfd);
+        }
     }
 
   dpcFree ((*tail)->streams);
@@ -713,6 +727,7 @@ dpcTailAdd (DPCTail *tail, const DPChar *name)
       dpcMemset (stream, 0x0, SIZEOF (*stream));
       stream->type = types[i];
       stream->fd = TAIL_FD_INVALID;
+      stream->headfd = TAIL_FD_INVALID;
 
       // Log files live in the work directory of the control process.
       dpcStrncpy (stream->path, (*tail)->workdir, CHARSMAX (stream->path));

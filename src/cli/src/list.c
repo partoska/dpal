@@ -97,6 +97,19 @@ dpcCsvQuote (DPChar *dst, const DPChar *src)
   dst[j] = '\0';
 }
 
+// Prints a JSON array element, followed by a comma unless it is the last.
+static void
+dpcJsonRow (const DPCMsgProcInfo *info, DPBool more)
+{
+  DPChar name[JSON_ESC_MAX];
+  dpcJsonEsc (name, info->name);
+
+  dpcInfo ("  {\"id\":%d,\"name\":\"%s\",\"state\":\"%s\",\"pid\":%d,"
+           "\"restarts\":%u}%s\n",
+           info->id, name, info->state == DP_STOPPED ? "stopped" : "running",
+           info->pid, info->restarts, more ? "," : "");
+}
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Definitions
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -158,22 +171,15 @@ dpcListRow (const DPCMsgProcInfo *info, void *ctx)
   switch (list->fmt)
     {
     case DPC_FJSON:
-      {
-        DPChar name[JSON_ESC_MAX];
-        dpcJsonEsc (name, info->name);
-
-        // Rows are separated before the next one, so the last one has no
-        // trailing comma.
-        if (list->count > 0)
-          {
-            DPC_INFO (",");
-          }
-        dpcInfo ("  {\"id\":%d,\"name\":\"%s\",\"state\":\"%s\",\"pid\":%d,"
-                 "\"restarts\":%u}",
-                 info->id, name, stopped ? "stopped" : "running", info->pid,
-                 info->restarts);
-        break;
-      }
+      // Only the next row tells whether a row needs a trailing comma, so each
+      // one is printed once the next one (or the footer) arrives. Every line
+      // is written whole, so other output cannot end up in the middle of it.
+      if (list->count > 0)
+        {
+          dpcJsonRow (&list->prev, TRUE);
+        }
+      list->prev = *info;
+      break;
 
     case DPC_FCSV:
       {
@@ -207,10 +213,10 @@ dpcListFooter (const DPCList *list)
   switch (list->fmt)
     {
     case DPC_FJSON:
-      // The last row is printed without a new line (see dpcListRow).
+      // The last row is still pending (see dpcListRow).
       if (list->count > 0)
         {
-          DPC_INFO ("");
+          dpcJsonRow (&list->prev, FALSE);
         }
       DPC_INFO ("]");
       break;
