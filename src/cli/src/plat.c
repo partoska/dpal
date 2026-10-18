@@ -472,14 +472,16 @@ dpcMsgSnd (DPInt msgid, const void *msgp, DPSize msgsz)
   return msgsnd (msgid, msgp, msgsz, 0);
 }
 
-DPSSize
+DPInt
 dpcMsgRcv (DPInt msgid, void *msgp, DPSize msgsz, DPLong msgtyp)
 {
+  // An empty message (e.g. a finish reply) is received too, so the size
+  // cannot tell whether there was a message. The buffer cannot either, its
+  // content is unspecified when nothing was received.
   errno = 0;
-  DPSSize result = msgrcv (msgid, msgp, msgsz, msgtyp, IPC_NOWAIT);
-  if (result >= 0)
+  if (msgrcv (msgid, msgp, msgsz, msgtyp, IPC_NOWAIT) >= 0)
     {
-      return result;
+      return 1;
     }
 
   if (errno == ENOMSG)
@@ -487,7 +489,7 @@ dpcMsgRcv (DPInt msgid, void *msgp, DPSize msgsz, DPLong msgtyp)
       return 0;
     }
 
-  return result;
+  return -1;
 }
 
 DPInt

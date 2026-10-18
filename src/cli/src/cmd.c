@@ -118,8 +118,7 @@ dpcCmdReplyWait (DPInt recvid, DPCInfoHandler handler, void *ctx)
       DPInt recv = dpcMsgRcv (recvid, &reply, SIZEOF (reply.data), 0);
       CHECK_POSIX (recv, "Failed to receive message",
                    CLEAN_EXIT_WITH_FAIL (recvid));
-
-      if (recv == 0 && reply.cmd == DPC_CNONE)
+      if (recv == 0)
         {
           // Throttle the loop.
           dpcSleep (SLOWDOWN_INTERVAL);

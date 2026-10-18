@@ -156,7 +156,7 @@ DP_API DPInt dpcOptInd (void);
 DPInt dpcFtok (const DPChar *pathname, DPInt projId);
 DPInt dpcMsgGet (DPInt key, DPBool create, DPBool excl);
 DPInt dpcMsgSnd (DPInt msgid, const void *msgp, DPSize msgsz);
-DPSSize dpcMsgRcv (DPInt msgid, void *msgp, DPSize msgsz, DPLong msgtyp);
+DPInt dpcMsgRcv (DPInt msgid, void *msgp, DPSize msgsz, DPLong msgtyp);
 DPInt dpcMsgRm (DPInt msgid);
 
 #endif
