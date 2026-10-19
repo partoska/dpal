@@ -4,7 +4,7 @@ description: Use the Daemon Pal (dpal) CLI to manage process lifecycles — star
 license: MIT
 metadata:
   author: Partoska Laboratory
-  version: "1.0.1"
+  version: "1.1.0"
 ---
 
 # Daemon Pal (dpal)

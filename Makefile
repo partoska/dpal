@@ -28,7 +28,7 @@
 # Project configuration.
 PROJECT = dpal
 LIBRARY = dplib
-VERSION = 1.4.1
+VERSION = 1.4.2
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 

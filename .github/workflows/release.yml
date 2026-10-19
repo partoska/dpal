@@ -172,6 +172,32 @@ jobs:
         with:
           name: packages_darwin_universal
           path: dist/
+  package-skill:
+    needs: [check-version]
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.check-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Package skill
+        run: |
+          set -euo pipefail
+          if ! grep -qx 'name: dpal' skills/dpal/SKILL.md; then
+            echo "::error::skills/dpal/SKILL.md does not declare the dpal skill"
+            exit 1
+          fi
+          # The archive holds the skill folder itself (dpal/SKILL.md, ...),
+          # the layout agent tools expect when installing a skill from a zip.
+          mkdir -p dist
+          ( cd skills && zip -r -X "../dist/dpal_${VERSION}_skill.zip" dpal -x '*/.*' )
+          unzip -l "dist/dpal_${VERSION}_skill.zip"
+      # Not named dpal_*, so the npm and Homebrew jobs do not download it.
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill_dpal
+          path: dist/dpal_${{ env.VERSION }}_skill.zip
   release:
     needs:
       [
@@ -180,6 +206,7 @@ jobs:
         build-linux-arm64,
         build-linux-armhf,
         build-macos,
+        package-skill,
       ]
     runs-on: ubuntu-24.04
     permissions:
@@ -203,6 +230,7 @@ jobs:
           cp artifacts/dpal_linux_armhf/dpal release/dpal_${VERSION}_linux_armhf
           cp artifacts/dpal_darwin_universal/dpal release/dpal_${VERSION}_darwin_universal
           cp artifacts/packages_*/* release/
+          cp artifacts/skill_dpal/dpal_${VERSION}_skill.zip release/
           ( cd release && sha256sum * > SHA256SUMS )
           cat release/SHA256SUMS
       - name: Create release

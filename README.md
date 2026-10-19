@@ -4,7 +4,7 @@
 
 # Daemon Pal
 
-[![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.4.1)
+[![Version](https://img.shields.io/badge/version-1.4.2-blue.svg)](https://github.com/partoska/dpal/releases/tag/v1.4.2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 [![Build](https://github.com/partoska/dpal/actions/workflows/build.yml/badge.svg)](https://github.com/partoska/dpal/actions/workflows/build.yml)
 [![npm](https://img.shields.io/npm/v/@partoska/dpal.svg)](https://www.npmjs.com/package/@partoska/dpal)
@@ -63,6 +63,20 @@ git clone https://github.com/partoska/dpal && cd dpal
 ./build.sh
 sudo ./install.sh
 ```
+
+### Agent skill
+
+An agent skill teaches AI coding agents how to drive the `dpal` CLI (modes,
+flags, INI format, and common workflows). Its source is in
+[`skills/dpal/`](skills/dpal/SKILL.md). Install it into your agent (Claude Code,
+Codex, Cursor, and others) with:
+
+```bash
+npx skills add partoska/dpal
+```
+
+Every release also ships `dpal_<version>_skill.zip`, which can be uploaded as a
+custom skill in Claude.
 
 ## Usage
 
